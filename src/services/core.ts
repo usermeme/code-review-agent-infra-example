@@ -5,7 +5,6 @@ import {
   imageRegistry,
   imageTag,
   geminiModel,
-  contextSummaryModel,
   minInstances,
   maxInstances,
 } from "../config";
@@ -50,11 +49,6 @@ export const coreService = new gcp.cloudrunv2.Service(
             { name: "REVIEW_RESULTS_TOPIC", value: reviewResultsTopic.name },
             { name: "REVIEW_MODEL", value: geminiModel },
             { name: "GOOGLE_CLOUD_PROJECT", value: project },
-            // Optional cheaper model for per-chunk context summarization;
-            // omitted -> Core uses REVIEW_MODEL for everything.
-            ...(contextSummaryModel
-              ? [{ name: "CONTEXT_SUMMARY_MODEL", value: contextSummaryModel }]
-              : []),
             {
               name: "GEMINI_API_KEY",
               valueSource: {

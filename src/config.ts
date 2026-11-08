@@ -13,7 +13,6 @@ export const region = gcpConfig.require("region");
 
 // Container & Model Configuration
 export const geminiModel = config.require("geminiModel");
-export const contextSummaryModel = config.get("contextSummaryModel");
 export const imageRegistry = config.require("imageRegistry");
 export const imageTag = config.require("imageTag");
 
