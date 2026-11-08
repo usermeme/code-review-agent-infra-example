@@ -1,0 +1,6 @@
+node_modules/
+bin/
+dist/
+pnpm-lock.yaml
+.git/
+.pulumi/

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "Node.js + Antigravity",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1.1.1": {},
+    "ghcr.io/devcontainers-extra/features/pulumi:1": {},
+    "ghcr.io/usermeme/devcontainer-features/opencode:1.2.0": {},
+    "ghcr.io/usermeme/devcontainer-features/cline:1.0.0": {},
+    "ghcr.io/usermeme/devcontainer-features/dotfiles:1.2.0": {},
+    "ghcr.io/usermeme/devcontainer-features/antigravity:1.2.0": {},
+    "ghcr.io/usermeme/devcontainer-features/pnpm:1.2.0": {
+      "runInstall": true
+    }
+  },
+
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+  "forwardPorts": [8081],
+  "remoteUser": "node"
+}

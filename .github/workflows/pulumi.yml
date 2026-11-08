@@ -1,0 +1,121 @@
+name: GitOps Infrastructure Deployment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Pulumi Action"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview
+          - up
+
+permissions:
+  contents: read
+  id-token: write # Required for Google Cloud Workload Identity Federation
+  pull-requests: write # Required for Pulumi to comment diffs on PRs
+
+jobs:
+  pulumi:
+    name: Pulumi GitOps
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Run ESLint
+        run: pnpm run lint
+
+      - name: TypeScript Build Check
+        run: pnpm run build
+
+      # Keyless authentication via Google Cloud Workload Identity Federation (WIF)
+      - name: Authenticate to Google Cloud via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Ensure private Google Cloud Storage bucket exists for Pulumi state
+      - name: Ensure Pulumi State Bucket Exists
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          STATE_BUCKET="gs://${PROJECT_ID}-pulumi-state"
+          if ! gcloud storage buckets describe "${STATE_BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+            echo "State bucket does not exist. Enabling storage API and creating bucket..."
+            gcloud services enable storage.googleapis.com --project="${PROJECT_ID}" --quiet || true
+            gcloud storage buckets create "${STATE_BUCKET}" \
+              --location=us-central1 \
+              --project="${PROJECT_ID}" \
+              --uniform-bucket-level-access
+            gcloud storage buckets update "${STATE_BUCKET}" --versioning
+          else
+            echo "✓ State bucket ${STATE_BUCKET} exists."
+          fi
+
+      - name: Setup Pulumi CLI
+        uses: pulumi/actions@v6
+        with:
+          pulumi-version: 3.x
+
+      # Pre-login to GCS backend and ensure the prod stack exists
+      - name: Initialize Pulumi GCS Backend & Stack
+        env:
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          PULUMI_CONFIG_PASSPHRASE: ""
+        run: |
+          pulumi login "gs://${PROJECT_ID}-pulumi-state"
+          pulumi stack select prod --create
+
+      # PRs: Run preview and comment diff on Pull Request
+      # Uses Google Cloud Storage backend (zero external accounts or tokens needed)
+      - name: Pulumi Preview (PR or manual preview)
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'preview')
+        uses: pulumi/actions@v6
+        with:
+          command: preview
+          stack-name: prod
+          cloud-url: gs://${{ vars.GCP_PROJECT_ID }}-pulumi-state
+          comment-on-pr: true
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""
+
+      # Merge to main: Run pulumi up to apply infrastructure to GCP
+      # refresh reconciles state with the cloud first, so services deleted
+      # out-of-band (e.g. by hand during incidents) are recreated instead of
+      # failing the update with 404.
+      - name: Pulumi Up (Merge to main or manual up)
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'up'))
+        uses: pulumi/actions@v6
+        with:
+          command: up
+          stack-name: prod
+          cloud-url: gs://${{ vars.GCP_PROJECT_ID }}-pulumi-state
+          refresh: true
+        env:
+          PULUMI_CONFIG_PASSPHRASE: ""

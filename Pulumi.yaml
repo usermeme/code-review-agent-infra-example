@@ -1,0 +1,6 @@
+name: code-review-agent-infra-example
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Example Google Cloud GitOps infrastructure for the Code Review Agent
