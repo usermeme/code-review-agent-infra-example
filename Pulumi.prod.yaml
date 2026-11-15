@@ -1,9 +1,9 @@
 config:
   gcp:project: your-gcp-project-id
   gcp:region: us-central1
-  code-review-agent-infra:geminiModel: gemini-3.8-flash
-  code-review-agent-infra:githubAppId: "123456"
-  code-review-agent-infra:imageRegistry: ghcr.io/usermeme
-  code-review-agent-infra:imageTag: latest
-  code-review-agent-infra:minInstances: 0
-  code-review-agent-infra:maxInstances: 5
+  code-review-agent-infra-example:geminiModel: gemini-3.8-flash
+  code-review-agent-infra-example:githubAppId: "123456"
+  code-review-agent-infra-example:imageRegistry: ghcr.io/usermeme
+  code-review-agent-infra-example:imageTag: latest
+  code-review-agent-infra-example:minInstances: 0
+  code-review-agent-infra-example:maxInstances: 5
