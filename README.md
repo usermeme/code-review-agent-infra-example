@@ -92,6 +92,8 @@ Click **Variables** tab → **New repository variable**:
 - `GCP_SERVICE_ACCOUNT`: _(From Step 1 output)_
 - `GCP_PROJECT_ID`: `your-gcp-project-id`
 
+Until all three variables are set, CI runs lint and build only and skips the Pulumi job with a notice, so a fresh fork stays green.
+
 _(All other settings like project, region, image registry, and the agent models are declared in `Pulumi.prod.yaml`, see [Agent Models](#agent-models))_
 
 #### Agent Models
