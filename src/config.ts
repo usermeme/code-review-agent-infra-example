@@ -11,8 +11,21 @@ const config = new pulumi.Config();
 export const project = gcpConfig.require("project");
 export const region = gcpConfig.require("region");
 
-// Container & Model Configuration
-export const geminiModel = config.require("geminiModel");
+// Gemini model per agent role. Core has no provider switch: each role runs on
+// the Gemini model infra picks here.
+// - triage: cheap decision model; routes PRs (skip/light/deep) and dedups findings
+// - reviewer: reads the diff and proposes findings
+// - verifier: confirms or drops the reviewer's findings before they are posted
+export const triageModel = config.require("triageModel");
+export const reviewerModel = config.require("reviewerModel");
+export const verifierModel = config.require("verifierModel");
+
+// Optional: comma-separated globs that always get a deep review. The one
+// exception to "zero fallbacks": unset keeps core's built-in list (auth,
+// security, migrations, SQL, workflows, Dockerfiles, Terraform).
+export const deepReviewPaths = config.get("deepReviewPaths");
+
+// Container Configuration
 export const imageRegistry = config.require("imageRegistry");
 export const imageTag = config.require("imageTag");
 

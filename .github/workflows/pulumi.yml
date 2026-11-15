@@ -22,8 +22,8 @@ permissions:
   pull-requests: write # Required for Pulumi to comment diffs on PRs
 
 jobs:
-  pulumi:
-    name: Pulumi GitOps
+  checks:
+    name: Lint & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -49,6 +49,36 @@ jobs:
 
       - name: TypeScript Build Check
         run: pnpm run build
+
+      # This repo is a template: forks deploy once they set the GCP variables
+      # (see README Step 2). Until then the Pulumi job is skipped, not failed.
+      - name: Report skipped deployment
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER == '' || vars.GCP_SERVICE_ACCOUNT == '' || vars.GCP_PROJECT_ID == ''
+        run: echo "::notice title=Pulumi skipped::Set the GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT and GCP_PROJECT_ID repository variables to run pulumi preview/up (README Step 1-2)."
+
+  pulumi:
+    name: Pulumi GitOps
+    needs: checks
+    if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != '' && vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile=false
 
       # Keyless authentication via Google Cloud Workload Identity Federation (WIF)
       - name: Authenticate to Google Cloud via WIF
