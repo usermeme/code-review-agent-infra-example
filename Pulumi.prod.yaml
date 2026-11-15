@@ -1,7 +1,9 @@
 config:
   gcp:project: your-gcp-project-id
   gcp:region: us-central1
-  code-review-agent-infra-example:geminiModel: gemini-3.8-flash
+  code-review-agent-infra-example:triageModel: gemini-decision-1
+  code-review-agent-infra-example:reviewerModel: gemini-4-hydrogen
+  code-review-agent-infra-example:verifierModel: gemini-4-argon
   code-review-agent-infra-example:githubAppId: "123456"
   code-review-agent-infra-example:imageRegistry: ghcr.io/usermeme
   code-review-agent-infra-example:imageTag: latest
