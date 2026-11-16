@@ -100,12 +100,12 @@ _(All other settings like project, region, image registry, and the agent models 
 
 The core service runs three Gemini agents, and the stack config picks the model for each one:
 
-| Config key        | Core env var        | Required | Role                                                                                             |
-| ----------------- | ------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `triageModel`     | `TRIAGE_MODEL`      | Yes      | Cheap decision model: routes each PR to skip, light or deep review, and drops duplicate findings |
-| `reviewerModel`   | `REVIEWER_MODEL`    | Yes      | Reads the diff with repo tools and proposes findings                                             |
-| `verifierModel`   | `VERIFIER_MODEL`    | Yes      | Confirms or drops the proposed findings before they are posted                                   |
-| `deepReviewPaths` | `DEEP_REVIEW_PATHS` | No       | Comma-separated globs that always get a deep review. Unset keeps core's built-in list            |
+| Config key        | Core env var        | Required | Role                                                                                         |
+| ----------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------- |
+| `triageModel`     | `TRIAGE_MODEL`      | Yes      | Cheap text model: routes each PR to skip, light or deep review, and drops duplicate findings |
+| `reviewerModel`   | `REVIEWER_MODEL`    | Yes      | Reads the diff with repo tools and proposes findings                                         |
+| `verifierModel`   | `VERIFIER_MODEL`    | Yes      | Confirms or drops the proposed findings before they are posted                               |
+| `deepReviewPaths` | `DEEP_REVIEW_PATHS` | No       | Comma-separated globs that always get a deep review. Unset keeps core's built-in list        |
 
 To change a model, edit `Pulumi.prod.yaml` and open a PR; the preview shows the new core revision.
 

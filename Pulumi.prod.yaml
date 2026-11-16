@@ -1,7 +1,7 @@
 config:
   gcp:project: your-gcp-project-id
   gcp:region: us-central1
-  code-review-agent-infra-example:triageModel: gemini-decision-1
+  code-review-agent-infra-example:triageModel: gemini-2.5-flash-lite
   code-review-agent-infra-example:reviewerModel: gemini-4-hydrogen
   code-review-agent-infra-example:verifierModel: gemini-4-argon
   code-review-agent-infra-example:githubAppId: "123456"
