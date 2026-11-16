@@ -13,7 +13,7 @@ export const region = gcpConfig.require("region");
 
 // Gemini model per agent role. Core has no provider switch: each role runs on
 // the Gemini model infra picks here.
-// - triage: cheap decision model; routes PRs (skip/light/deep) and dedups findings
+// - triage: cheap text model; routes PRs (skip/light/deep) and dedups findings
 // - reviewer: reads the diff and proposes findings
 // - verifier: confirms or drops the reviewer's findings before they are posted
 export const triageModel = config.require("triageModel");
