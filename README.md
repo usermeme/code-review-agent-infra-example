@@ -65,7 +65,7 @@ flowchart TD
 
 ### Step 1: One-Time Bootstrap (Workload Identity Federation)
 
-Run the one-time helper script to configure Workload Identity Federation in your GCP project. This allows GitHub Actions to talk to GCP without static keys:
+Run the one-time helper script to configure Workload Identity Federation in your GCP project. This allows GitHub Actions to talk to GCP without static keys. It needs `gcloud` and `pulumi`:
 
 ```bash
 export GCP_PROJECT_ID="your-gcp-project-id"
@@ -73,10 +73,34 @@ export GITHUB_REPO="usermeme/code-review-agent-infra-example"
 pnpm run setup:wif
 ```
 
-The script will output two values:
+The script (idempotent, safe to re-run) creates:
+
+- a WIF pool and GitHub OIDC provider, trusting only your GitHub organization;
+- the deployer `sa-pulumi-deployer`, impersonable **only from `GITHUB_REPO`**, with just the roles
+  the stack needs (Cloud Run, Pub/Sub, Firestore indexes, Secret Manager, service accounts,
+  project IAM, Service Usage);
+- the private, versioned state bucket `gs://<your-gcp-project-id>-pulumi-state` (the deployer may
+  read and write only this bucket);
+- the secret `pulumi-config-passphrase` with a random passphrase that encrypts the secrets in the
+  state (never printed; CI reads it from Secret Manager);
+- the `prod` stack. **Commit the `encryptionsalt`** it adds to `Pulumi.prod.yaml`.
+
+It prints two values:
 
 - `GCP_WORKLOAD_IDENTITY_PROVIDER` (e.g., `projects/123456/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider`)
 - `GCP_SERVICE_ACCOUNT` (e.g., `sa-pulumi-deployer@your-gcp-project-id.iam.gserviceaccount.com`)
+
+> [!IMPORTANT]
+> **Upgrading a deployment made with an older version of this script?** Older versions bound the
+> whole pool to the deployer (any repository of your organization could act as it) and used an
+> empty Pulumi passphrase. Re-run the script, then:
+>
+> - remove the pool-wide binding:
+>   `gcloud iam service-accounts remove-iam-policy-binding sa-pulumi-deployer@<project>.iam.gserviceaccount.com --role=roles/iam.workloadIdentityUser --member="principalSet://iam.googleapis.com/projects/<number>/locations/global/workloadIdentityPools/github-actions-pool/*"`
+> - remove the old broad roles: `roles/editor` and `roles/storage.admin` on the project;
+> - re-encrypt the state with the new passphrase: `pulumi stack export --show-secrets` with
+>   `PULUMI_CONFIG_PASSPHRASE=""`, set `secrets_providers` to the new salt, then `pulumi stack import`
+>   with the new passphrase, and commit the new `encryptionsalt`.
 
 ---
 
