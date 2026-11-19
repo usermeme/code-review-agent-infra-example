@@ -127,11 +127,22 @@ The core service runs three Gemini agents, and the stack config picks the model 
 | Config key        | Core env var        | Required | Role                                                                                         |
 | ----------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------- |
 | `triageModel`     | `TRIAGE_MODEL`      | Yes      | Cheap text model: routes each PR to skip, light or deep review, and drops duplicate findings |
-| `reviewerModel`   | `REVIEWER_MODEL`    | Yes      | Reads the diff with repo tools and proposes findings                                         |
+| `reviewerModel`   | `REVIEWER_MODEL`    | Yes      | Reads the diff with repo tools and proposes findings; also runs the comment judge            |
 | `verifierModel`   | `VERIFIER_MODEL`    | Yes      | Confirms or drops the proposed findings before they are posted                               |
 | `deepReviewPaths` | `DEEP_REVIEW_PATHS` | No       | Comma-separated globs that always get a deep review. Unset keeps core's built-in list        |
 
 To change a model, edit `Pulumi.prod.yaml` and open a PR; the preview shows the new core revision.
+
+#### Jobs
+
+Core runs two jobs, and the stack config switches each one on or off:
+
+| Config key            | Core env var            | Required | Job                                                                                 |
+| --------------------- | ----------------------- | -------- | ----------------------------------------------------------------------------------- |
+| `codeReviewEnabled`   | `CODE_REVIEW_ENABLED`   | Yes      | Reviews PRs when they are opened, pushed or `/review` is commented                  |
+| `commentJudgeEnabled` | `COMMENT_JUDGE_ENABLED` | Yes      | Checks resolved review threads and re-opens the ones the code does not actually fix |
+
+Set `codeReviewEnabled: false` and keep `commentJudgeEnabled: true` to run only the comment judge, which costs far less than full reviews. The judge also needs the GitHub App subscribed to **Pull request review thread** events.
 
 #### 2. Repository Secrets (Sensitive)
 
