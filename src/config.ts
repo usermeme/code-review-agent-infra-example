@@ -25,6 +25,11 @@ export const verifierModel = config.require("verifierModel");
 // security, migrations, SQL, workflows, Dockerfiles, Terraform).
 export const deepReviewPaths = config.get("deepReviewPaths");
 
+// Which jobs core runs. Set one to false to run only the other, e.g. only the
+// comment judge (checks resolved review threads) to keep costs low.
+export const codeReviewEnabled = config.requireBoolean("codeReviewEnabled");
+export const commentJudgeEnabled = config.requireBoolean("commentJudgeEnabled");
+
 // Container Configuration
 export const imageRegistry = config.require("imageRegistry");
 export const imageTag = config.require("imageTag");

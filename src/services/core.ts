@@ -8,6 +8,8 @@ import {
   reviewerModel,
   verifierModel,
   deepReviewPaths,
+  codeReviewEnabled,
+  commentJudgeEnabled,
   minInstances,
   maxInstances,
 } from "../config";
@@ -55,6 +57,8 @@ export const coreService = new gcp.cloudrunv2.Service(
             { name: "REVIEWER_MODEL", value: reviewerModel },
             { name: "VERIFIER_MODEL", value: verifierModel },
             ...(deepReviewPaths ? [{ name: "DEEP_REVIEW_PATHS", value: deepReviewPaths }] : []),
+            { name: "CODE_REVIEW_ENABLED", value: String(codeReviewEnabled) },
+            { name: "COMMENT_JUDGE_ENABLED", value: String(commentJudgeEnabled) },
             { name: "GOOGLE_CLOUD_PROJECT", value: project },
             {
               name: "GEMINI_API_KEY",
