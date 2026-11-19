@@ -26,6 +26,8 @@ POOL_NAME="github-actions-pool"
 PROVIDER_NAME="github-provider"
 DEPLOYER_SA="sa-pulumi-deployer"
 DEPLOYER_SA_EMAIL="${DEPLOYER_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
+STATE_BUCKET="gs://${PROJECT_ID}-pulumi-state"
+PASSPHRASE_SECRET="pulumi-config-passphrase"
 
 echo -e "${BLUE}========================================================================${NC}"
 echo -e "${BLUE}Setting up Workload Identity Federation for GitHub Actions${NC}"
@@ -42,6 +44,7 @@ gcloud services enable \
   sts.googleapis.com \
   storage.googleapis.com \
   serviceusage.googleapis.com \
+  secretmanager.googleapis.com \
   --project="${PROJECT_ID}" --quiet
 
 PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)")
@@ -89,14 +92,18 @@ else
 fi
 
 # 5. Assign IAM roles to Pulumi Deployer
+# Only what the stack manages: Cloud Run, Pub/Sub, a Firestore field, secrets,
+# service accounts, project IAM members, APIs. State access is granted on the
+# state bucket only (step 7).
 echo -e "\n${BLUE}5. Assigning IAM Roles to Deployer...${NC}"
 ROLES=(
-  "roles/editor"
   "roles/run.admin"
-  "roles/resourcemanager.projectIamAdmin"
+  "roles/pubsub.admin"
+  "roles/datastore.indexAdmin"
   "roles/secretmanager.admin"
+  "roles/iam.serviceAccountAdmin"
   "roles/iam.serviceAccountUser"
-  "roles/storage.admin"
+  "roles/resourcemanager.projectIamAdmin"
   "roles/serviceusage.serviceUsageAdmin"
 )
 
@@ -109,6 +116,9 @@ for ROLE in "${ROLES[@]}"; do
 done
 
 # 6. Bind GitHub Actions repo to Service Account
+# Only this repository may impersonate the deployer. Never bind the whole pool
+# (".../${POOL_NAME}/*"): that would let any workflow of any repository of the
+# organization act as the deployer.
 echo -e "\n${BLUE}6. Binding GitHub repository to Service Account via WIF...${NC}"
 gcloud iam service-accounts add-iam-policy-binding "${DEPLOYER_SA_EMAIL}" \
   --project="${PROJECT_ID}" \
@@ -116,24 +126,54 @@ gcloud iam service-accounts add-iam-policy-binding "${DEPLOYER_SA_EMAIL}" \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_NAME}/attribute.repository/${GITHUB_REPO}" \
   --quiet >/dev/null
 
-gcloud iam service-accounts add-iam-policy-binding "${DEPLOYER_SA_EMAIL}" \
-  --project="${PROJECT_ID}" \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_NAME}/*" \
-  --quiet >/dev/null
-
-# 7. Create Pulumi State Storage Bucket
-STATE_BUCKET="gs://${PROJECT_ID}-pulumi-state"
+# 7. Create Pulumi State Storage Bucket (private, versioned)
 echo -e "\n${BLUE}7. Creating Pulumi State GCS Bucket (${STATE_BUCKET})...${NC}"
 if ! gcloud storage buckets describe "${STATE_BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
   gcloud storage buckets create "${STATE_BUCKET}" \
     --project="${PROJECT_ID}" \
     --location="us-central1" \
-    --uniform-bucket-level-access
-  gcloud storage buckets update "${STATE_BUCKET}" --versioning
+    --uniform-bucket-level-access --public-access-prevention
   echo -e "${GREEN}✓ Created state bucket ${STATE_BUCKET}${NC}"
 else
   echo -e "${GREEN}✓ State bucket ${STATE_BUCKET} already exists.${NC}"
+fi
+gcloud storage buckets update "${STATE_BUCKET}" --versioning --quiet >/dev/null
+gcloud storage buckets add-iam-policy-binding "${STATE_BUCKET}" \
+  --member="serviceAccount:${DEPLOYER_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin" --quiet >/dev/null
+echo -e "${GREEN}✓ Deployer can read and write the state${NC}"
+
+# 8. Pulumi passphrase (encrypts the secrets in the state), never printed
+echo -e "\n${BLUE}8. Pulumi passphrase secret (${PASSPHRASE_SECRET})...${NC}"
+if ! gcloud secrets describe "${PASSPHRASE_SECRET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud secrets create "${PASSPHRASE_SECRET}" --project="${PROJECT_ID}" --replication-policy=automatic
+  openssl rand -base64 48 | tr -d '\n' |
+    gcloud secrets versions add "${PASSPHRASE_SECRET}" --project="${PROJECT_ID}" --data-file=-
+  echo -e "${GREEN}✓ Generated a random passphrase${NC}"
+else
+  echo -e "${GREEN}✓ Passphrase already exists (left unchanged)${NC}"
+fi
+gcloud secrets add-iam-policy-binding "${PASSPHRASE_SECRET}" \
+  --project="${PROJECT_ID}" \
+  --member="serviceAccount:${DEPLOYER_SA_EMAIL}" \
+  --role="roles/secretmanager.secretAccessor" --quiet >/dev/null
+
+# 9. Pulumi stack "prod" (adds encryptionsalt to Pulumi.prod.yaml: commit it)
+echo -e "\n${BLUE}9. Pulumi stack 'prod'...${NC}"
+if command -v pulumi >/dev/null 2>&1; then
+  PULUMI_CONFIG_PASSPHRASE="$(gcloud secrets versions access latest \
+    --secret="${PASSPHRASE_SECRET}" --project="${PROJECT_ID}")"
+  export PULUMI_CONFIG_PASSPHRASE
+  pulumi login "${STATE_BUCKET}"
+  if ! pulumi stack select prod >/dev/null 2>&1; then
+    pulumi stack init prod --secrets-provider=passphrase
+    echo -e "${GREEN}✓ Stack created. Commit the encryptionsalt added to Pulumi.prod.yaml.${NC}"
+  else
+    echo -e "${GREEN}✓ Stack already exists${NC}"
+  fi
+else
+  echo -e "${YELLOW}pulumi not found. Install it and re-run this script, or run:${NC}"
+  echo "  pulumi login ${STATE_BUCKET} && pulumi stack init prod --secrets-provider=passphrase"
 fi
 
 WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_NAME}/providers/${PROVIDER_NAME}"

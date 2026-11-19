@@ -28,15 +28,16 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
+        # Version from "packageManager" in package.json
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: "pnpm"
@@ -64,15 +65,16 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
+        # Version from "packageManager" in package.json
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: "pnpm"
@@ -82,58 +84,47 @@ jobs:
 
       # Keyless authentication via Google Cloud Workload Identity Federation (WIF)
       - name: Authenticate to Google Cloud via WIF
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
 
-      # Ensure private Google Cloud Storage bucket exists for Pulumi state
-      - name: Ensure Pulumi State Bucket Exists
+      # The passphrase encrypts the secrets in the state (scripts/setup-wif.sh)
+      - name: Load Pulumi passphrase from Secret Manager
         env:
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
         run: |
-          STATE_BUCKET="gs://${PROJECT_ID}-pulumi-state"
-          if ! gcloud storage buckets describe "${STATE_BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
-            echo "State bucket does not exist. Enabling storage API and creating bucket..."
-            gcloud services enable storage.googleapis.com --project="${PROJECT_ID}" --quiet || true
-            gcloud storage buckets create "${STATE_BUCKET}" \
-              --location=us-central1 \
-              --project="${PROJECT_ID}" \
-              --uniform-bucket-level-access
-            gcloud storage buckets update "${STATE_BUCKET}" --versioning
-          else
-            echo "✓ State bucket ${STATE_BUCKET} exists."
-          fi
+          PASSPHRASE="$(gcloud secrets versions access latest \
+            --secret=pulumi-config-passphrase --project="${PROJECT_ID}")"
+          echo "::add-mask::${PASSPHRASE}"
+          echo "PULUMI_CONFIG_PASSPHRASE=${PASSPHRASE}" >> "${GITHUB_ENV}"
 
       - name: Setup Pulumi CLI
-        uses: pulumi/actions@v6
+        uses: pulumi/actions@8582a9e8cc630786854029b4e09281acd6794b58 # v6.6.1
         with:
           pulumi-version: 3.x
 
-      # Pre-login to GCS backend and ensure the prod stack exists
-      - name: Initialize Pulumi GCS Backend & Stack
+      # The state bucket and the prod stack are created by scripts/setup-wif.sh
+      - name: Select the Pulumi stack
         env:
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          PULUMI_CONFIG_PASSPHRASE: ""
         run: |
           pulumi login "gs://${PROJECT_ID}-pulumi-state"
-          pulumi stack select prod --create
+          pulumi stack select prod
 
       # PRs: Run preview and comment diff on Pull Request
       # Uses Google Cloud Storage backend (zero external accounts or tokens needed)
       - name: Pulumi Preview (PR or manual preview)
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'preview')
-        uses: pulumi/actions@v6
+        uses: pulumi/actions@8582a9e8cc630786854029b4e09281acd6794b58 # v6.6.1
         with:
           command: preview
           stack-name: prod
           cloud-url: gs://${{ vars.GCP_PROJECT_ID }}-pulumi-state
           comment-on-pr: true
-        env:
-          PULUMI_CONFIG_PASSPHRASE: ""
 
       # Merge to main: Run pulumi up to apply infrastructure to GCP
       # refresh reconciles state with the cloud first, so services deleted
@@ -141,11 +132,9 @@ jobs:
       # failing the update with 404.
       - name: Pulumi Up (Merge to main or manual up)
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'up'))
-        uses: pulumi/actions@v6
+        uses: pulumi/actions@8582a9e8cc630786854029b4e09281acd6794b58 # v6.6.1
         with:
           command: up
           stack-name: prod
           cloud-url: gs://${{ vars.GCP_PROJECT_ID }}-pulumi-state
           refresh: true
-        env:
-          PULUMI_CONFIG_PASSPHRASE: ""
